@@ -10,6 +10,7 @@ extern id *NSApp;
 #define NSApplicationActivationPolicyRegular 0
 #define NSWindowStyleMaskTitled (1 << 0)
 #define NSBackingStoreBuffered 2
+#define NSSplitViewDividerStylePaneSplitter 3
 
 template<typename T, typename... Args>
 id msgsend(T* obj, const char* sel, Args... args) {
@@ -71,14 +72,35 @@ id initWindow(id self) {
         NSBackingStoreBuffered,
         YES);
 
-    id textField = msgsend(
-                msgsend(
-                    objc_getClass("NSTextField"),
-                    "labelWithString:",
-                    STR("it works!")),
-                "autorelease");
-    msgsend(textField, "setFrame:", frame);
-    msgsend(window, "setContentView:", textField);
+    id splitView = msgsend(
+        msgsend(
+            alloc("NSSplitView"),
+            "initWithFrame:",
+            frame),
+        "autorelease");
+    msgsend(splitView, "setVertical:", YES);
+    msgsend(splitView,
+            "setDividerStyle:",
+            NSSplitViewDividerStylePaneSplitter);
+
+
+    id pane1 = msgsend(
+        msgsend(
+            objc_getClass("NSTextField"),
+            "labelWithString:",
+            STR("LEFT PANEL")),
+        "autorelease");
+    msgsend(splitView, "addSubview:", pane1);
+
+    id pane2 = msgsend(
+        msgsend(
+            objc_getClass("NSTextField"),
+            "labelWithString:",
+            STR("RIGHT PANEL")),
+        "autorelease");
+    msgsend(splitView, "addSubview:", pane2);
+
+    msgsend(window, "setContentView:", splitView);
     return window;
 }
 
