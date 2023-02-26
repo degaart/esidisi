@@ -61,18 +61,32 @@ void trace(const char* msg) {
 }
 
 static
+id initWindow(id self) {
+    auto frame = CGRectMake(0.0, 0.0, 640.0, 480.0);
+    auto window = msgsend(
+        alloc("NSWindow"),
+        "initWithContentRect:styleMask:backing:defer:",
+        frame,
+        NSWindowStyleMaskTitled,
+        NSBackingStoreBuffered,
+        YES);
+
+    id textField = msgsend(
+                msgsend(
+                    objc_getClass("NSTextField"),
+                    "labelWithString:",
+                    STR("it works!")),
+                "autorelease");
+    msgsend(textField, "setFrame:", frame);
+    msgsend(window, "setContentView:", textField);
+    return window;
+}
+
+static
 id AppDelegate_init(id self, SEL _cmd) {
     self = msgsendsuper(self, "init");
     if(self) {
-        auto rc = CGRectMake(0.0, 0.0, 640.0, 480.0);
-        auto window = msgsend(
-            alloc("NSWindow"),
-            "initWithContentRect:styleMask:backing:defer:",
-            rc,
-            NSWindowStyleMaskTitled,
-            NSBackingStoreBuffered,
-            YES);
-
+        id window = initWindow(self);
         Ivar windowVar = class_getInstanceVariable(object_getClass(self), "window");
         object_setIvar(self, windowVar, window);
     }
