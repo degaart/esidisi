@@ -1,8 +1,8 @@
 # vim: noexpandtab
 .PHONY: all clean run
 
-CXXFLAGS := -std=gnu++17 -fno-omit-frame-pointer -fsanitize=address
-LDFLAGS := -framework Cocoa -fsanitize=address
+CXXFLAGS := -g -std=gnu++17 -fno-omit-frame-pointer -fsanitize=address
+LDFLAGS := -g -framework Cocoa -fsanitize=address
 
 all: build/DBATool
 
