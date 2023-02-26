@@ -17,9 +17,9 @@ id msgsend(T* obj, const char* sel, Args... args) {
     return ((fntype)objc_msgSend)(obj, sel_getUid(sel), args...);
 }
 
-template<typename O>
-id msgsend(O obj, const char* sel) {
-    using fntype = id (*)(O,SEL);
+template<typename T>
+id msgsend(T obj, const char* sel) {
+    using fntype = id (*)(T,SEL);
     return ((fntype)objc_msgSend)(obj, sel_getUid(sel));
 }
 
@@ -33,8 +33,8 @@ id msgsendsuper(T obj, const char* sel, Args... args) {
     return ((fntype)objc_msgSendSuper)(&super, sel_getUid(sel), args...);
 }
 
-template<typename O>
-id msgsendsuper(O obj, const char* sel) {
+template<typename T>
+id msgsendsuper(T obj, const char* sel) {
     using fntype = id(*)(objc_super*, SEL);
 
     objc_super super;
