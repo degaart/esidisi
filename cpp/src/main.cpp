@@ -11,34 +11,26 @@ extern id *NSApp;
 #define NSWindowStyleMaskTitled (1 << 0)
 #define NSBackingStoreBuffered 2
 
-template<typename O, typename A1, typename A2, typename A3, typename A4, typename A5>
-id msgsend(O obj, const char* sel, A1 a1, A2 a2, A3 a3, A4 a4, A5 a5) {
-    using fntype = id(*)(O,SEL,A1,A2,A3,A4,A5);
-    return ((fntype)objc_msgSend)(obj, sel_getUid(sel), a1, a2, a3, a4, a5);
+template<typename T, typename... Args>
+id msgsend(T* obj, const char* sel, Args... args) {
+    using fntype = id(*)(T*,SEL,decltype(args)...);
+    return ((fntype)objc_msgSend)(obj, sel_getUid(sel), args...);
 }
 
-template<typename O, typename A1, typename A2, typename A3, typename A4>
-id msgsend(O obj, const char* sel, A1 a1, A2 a2, A3 a3, A4 a4) {
-    using fntype = id(*)(O,SEL,A1,A2,A3,A4);
-    return ((fntype)objc_msgSend)(obj, sel_getUid(sel), a1, a2, a3, a4);
+template<typename O>
+id msgsend(O obj, const char* sel) {
+    using fntype = id (*)(O,SEL);
+    return ((fntype)objc_msgSend)(obj, sel_getUid(sel));
 }
 
-template<typename O, typename A1, typename A2, typename A3>
-id msgsend(O obj, const char* sel, A1 a1, A2 a2, A3 a3) {
-    using fntype = id(*)(O,SEL,A1,A2,A3);
-    return ((fntype)objc_msgSend)(obj, sel_getUid(sel), a1, a2, a3);
-}
+template<typename T, typename... Args>
+id msgsendsuper(T obj, const char* sel, Args... args) {
+    using fntype = id(*)(objc_super*,SEL,decltype(args)...);
 
-template<typename O, typename A1, typename A2>
-id msgsend(O obj, const char* sel, A1 a1, A2 a2) {
-    using fntype = id(*)(O,SEL,A1,A2);
-    return ((fntype)objc_msgSend)(obj, sel_getUid(sel), a1, a2);
-}
-
-template<typename O, typename A1>
-id msgsend(O obj, const char* sel, A1 a1) {
-    using fntype = id (*)(O,SEL,A1);
-    return ((fntype)objc_msgSend)(obj, sel_getUid(sel), a1);
+    objc_super super;
+    super.receiver = obj;
+    super.super_class = class_getSuperclass(object_getClass(obj));
+    return ((fntype)objc_msgSendSuper)(&super, sel_getUid(sel), args...);
 }
 
 template<typename O>
@@ -49,12 +41,6 @@ id msgsendsuper(O obj, const char* sel) {
     super.receiver = obj;
     super.super_class = class_getSuperclass(object_getClass(obj));
     return ((fntype)objc_msgSendSuper)(&super, sel_getUid(sel));
-}
-
-template<typename O>
-id msgsend(O obj, const char* sel) {
-    using fntype = id (*)(O,SEL);
-    return ((fntype)objc_msgSend)(obj, sel_getUid(sel));
 }
 
 id alloc(const char* cls) {
