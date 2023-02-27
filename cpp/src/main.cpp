@@ -58,7 +58,26 @@ id getivar(id obj, const char* name) {
 
 void setivar(id obj, const char* name, id value) {
     Ivar ivar = class_getInstanceVariable(object_getClass(obj), name);
+    assert(ivar != nullptr);
     object_setIvar(obj, ivar, value);
+}
+
+template<typename T>
+T getivarp(id obj, const char* name) {
+    Ivar ivar = class_getInstanceVariable(object_getClass(obj), name);
+    assert(ivar != nullptr);
+
+    auto offset = ivar_getOffset(ivar);
+    return  *((const T*)((const char*)obj + offset));
+}
+
+template<typename T>
+void setivarp(id obj, const char* name, T value) {
+    Ivar ivar = class_getInstanceVariable(object_getClass(obj), name);
+    assert(ivar != nullptr);
+
+    auto offset = ivar_getOffset(ivar);
+    *((T*)((char*)obj + offset)) = value;
 }
 
 #define STR(s) \
