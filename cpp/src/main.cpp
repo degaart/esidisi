@@ -5,6 +5,9 @@
 #include <CoreFoundation/CoreFoundation.h>
 #include <stdio.h>
 #include <cassert>
+#include <string>
+#include <string_view>
+#include <vector>
 
 extern "C" void NSLog(objc_object *, ...);
 extern id *NSApp;
@@ -14,6 +17,19 @@ extern id *NSApp;
 #define NSSplitViewDividerStylePaneSplitter 3
 #define NSTableColumnAutoresizingMask (1 << 0)
 #define NSTableColumnUserResizingMask ( 1 << 1 )
+
+struct TreeItem {
+    std::string label;
+    std::vector<std::unique_ptr<TreeItem>> children;
+    
+    TreeItem* addChild(std::string_view label) {
+        auto child = std::make_unique<TreeItem>();
+        child->label = label;
+        TreeItem* result = child.get();
+        children.push_back(std::move(child));
+        return result;
+    }
+};
 
 template<typename T, typename... Args>
 id msgsend(T* obj, const char* sel, Args... args) {
@@ -206,17 +222,32 @@ void AppDelegate_populateMainMenu(id self, SEL _cmd) {
 static
 id TreeViewDataSource_init(id self, SEL _cmd) {
     if((self = msgsendsuper(self ,"init"))) {
-        id items = msgsend(alloc("NSMutableArray"), "init");
-        msgsend(items, "addObject:", CFSTR("Item 1"));
-        msgsend(items, "addObject:", CFSTR("Item 2"));
-        msgsend(items, "addObject:", CFSTR("Item 3"));
-        setivar(self, "items", items);
+        TreeItem* root = new TreeItem;
+        root->label = "Root";
+
+        auto child = root->addChild("Item 1");
+        child->addChild("Item 1a");
+        child->addChild("Item 1b");
+        child->addChild("Item 1c");
+
+        child = root->addChild("Item 2");
+        child->addChild("Item 2a");
+        child->addChild("Item 2b");
+        child->addChild("Item 2c");
+
+        child = root->addChild("Item 3");
+        child->addChild("Item 3a");
+        child->addChild("Item 3b");
+        child->addChild("Item 3c");
+
+        setivarp(self, "root", root);
     }
     return self;
 }
 
 void TreeViewDataSource_dealloc(id self) {
-    msgsend(getivar(self, "items"), "release");
+    printf("%s\n", __PRETTY_FUNCTION__);
+    delete(getivar(self, "root"));
     msgsendsuper(self, "dealloc");
 }
 
@@ -224,40 +255,51 @@ static
 id TreeViewDataSource_outlineView_child_ofItem(id self, SEL _cmd, id view, int child, id item) {
     printf("%s\n", __PRETTY_FUNCTION__);
     if(!item) {
-        id items = getivar(self, "items");
-        return msgsend(items, "objectAtIndex:", child);
+        TreeItem* root = getivarp<TreeItem*>(self, "root");
+        assert(root->label == "Root");
+
+        TreeItem* obj = root->children.at(child).get();
+        return msgsend(objc_getClass("NSValue"), "valueWithPointer:", obj);
     } else {
-        return nullptr;
+        TreeItem* obj = (TreeItem*)msgsend(item, "pointerValue");
+        return msgsend(objc_getClass("NSValue"), "valueWithPointer:", obj->children.at(child).get());
     }
 }
 
 static
 BOOL TreeViewDataSource_outlineView_isItemExpandable(id self, SEL _cmd, id view, id item) {
     printf("%s\n", __PRETTY_FUNCTION__);
-    // if(!item) {
-    //     return YES;
-    // } else {
-        return NO;
-    // }
+    if(!item) {
+        TreeItem* root = getivarp<TreeItem*>(self, "root");
+        assert(root->label == "Root");
+        return !root->children.empty();
+    } else {
+        TreeItem* obj = (TreeItem*)msgsend(item, "pointerValue");
+        return !obj->children.empty();
+    }
 }
 
 static
 int TreeViewDataSource_outlineView_numbernumberOfChildrenOfItem(id self, SEL _cmd, id view, id item) {
-    printf("%s(%p)\n", __PRETTY_FUNCTION__, item);
+    printf("%s\n", __PRETTY_FUNCTION__);
     if(!item) {
-        return 3;
+        TreeItem* root = getivarp<TreeItem*>(self, "root");
+        return root->children.size();
     } else {
-        return 0;
+        TreeItem* obj = (TreeItem*)msgsend(item, "pointerValue");
+        return obj->children.size();
     }
 }
 
 static
 id TreeViewDataSource_outlineView_objectValueForTableColumn_byItem(id self, SEL _cmd, id view, id column, id item) {
-    printf("%s(%p, %p)\n", __PRETTY_FUNCTION__, column, item);
-    if(item) {
-        return item;
+    printf("%s\n", __PRETTY_FUNCTION__);
+    if(!item) {
+        TreeItem* root = getivarp<TreeItem*>(self, "root");
+        return stringWithUTF8String(root->label.c_str());
     } else {
-        return (id)CFSTR("/");
+        TreeItem* obj = (TreeItem*)msgsend(item, "pointerValue");
+        return stringWithUTF8String(obj->label.c_str());
     }
 }
 
@@ -283,7 +325,7 @@ int main() {
     class_addMethod(treeDataSourceClass, sel_getUid("outlineView:isItemExpandable:"), (IMP)TreeViewDataSource_outlineView_isItemExpandable, "i@:@");
     class_addMethod(treeDataSourceClass, sel_getUid("outlineView:numberOfChildrenOfItem:"), (IMP)TreeViewDataSource_outlineView_numbernumberOfChildrenOfItem, "i@:@");
     class_addMethod(treeDataSourceClass, sel_getUid("outlineView:objectValueForTableColumn:byItem:"), (IMP)TreeViewDataSource_outlineView_objectValueForTableColumn_byItem, "@@:@@@");
-    class_addIvar(treeDataSourceClass, "items", sizeof(id), alignof(id), "@");
+    class_addIvar(treeDataSourceClass, "root",sizeof(TreeItem*), alignof(TreeItem*), "@");
     objc_registerClassPair(treeDataSourceClass);
 
     auto appDelegate = msgsend(msgsend(msgsend(appDelegateClass, "alloc"), "init"), "autorelease");
