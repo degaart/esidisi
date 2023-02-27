@@ -2,6 +2,7 @@
 #include <objc/runtime.h>
 #include <objc/message.h>
 #include <CoreGraphics/CoreGraphics.h>
+#include <CoreFoundation/CoreFoundation.h>
 #include <stdio.h>
 #include <cassert>
 
@@ -80,11 +81,12 @@ void setivarp(id obj, const char* name, T value) {
     *((T*)((char*)obj + offset)) = value;
 }
 
-#define STR(s) \
-    msgsend(objc_getClass("NSString"), "stringWithUTF8String:", s)
+id stringWithUTF8String(const char* str) {
+    return msgsend(objc_getClass("NSString"), "stringWithUTF8String:", str);
+}
 
 void trace(const char* msg) {
-    NSLog(STR(msg));
+    NSLog(stringWithUTF8String(msg));
 }
 
 static
@@ -121,7 +123,7 @@ id initWindow(id self) {
     id tableColumn = msgsend(
             msgsend(alloc("NSTableColumn"), 
                 "initWithIdentifier:",
-                STR("A")),
+                CFSTR("A")),
             "autorelease");
     msgsend(tableColumn, "setResizingMask:", NSTableColumnAutoresizingMask);
 
@@ -134,7 +136,7 @@ id initWindow(id self) {
         msgsend(
             objc_getClass("NSTextField"),
             "labelWithString:",
-            STR("RIGHT PANEL")),
+            CFSTR("RIGHT PANEL")),
         "autorelease");
     msgsend(splitView, "addSubview:", pane2);
 
@@ -167,30 +169,30 @@ void AppDelegate_applicationDidFinishLaunching(id self, SEL _cmd, id aNotificati
 
 static
 void AppDelegate_populateMainMenu(id self, SEL _cmd) {
-     id mainMenu = msgsend(alloc("NSMenu"), "initWithTitle:", STR("MainMenu"));
+     id mainMenu = msgsend(alloc("NSMenu"), "initWithTitle:", CFSTR("MainMenu"));
      id menuItem = msgsend(
              mainMenu,
              "addItemWithTitle:action:keyEquivalent:",
-             STR("Apple"),
+             CFSTR("Apple"),
              NULL,
-             STR(""));
-     id subMenu = msgsend(alloc("NSMenu"), "initWithTitle:", STR("Apple"));
+             CFSTR(""));
+     id subMenu = msgsend(alloc("NSMenu"), "initWithTitle:", CFSTR("Apple"));
      msgsend(NSApp, "setAppleMenu:", subMenu);
 
      id appMenuItem = msgsend(subMenu,
              "addItemWithTitle:action:keyEquivalent:",
-             STR("About DBATool"),
+             CFSTR("About DBATool"),
              sel_getUid("orderFrontStandardAboutPanel:"),
-             STR(""));
+             CFSTR(""));
      msgsend(appMenuItem, "setTarget:", NSApp);
      msgsend(subMenu, "addItem:",
              msgsend(objc_getClass("NSMenuItem"), "separatorItem"));
 
      id quitMenuItem = msgsend(subMenu,
              "addItemWithTitle:action:keyEquivalent:",
-             STR("Quit"),
+             CFSTR("Quit"),
              sel_getUid("terminate:"),
-             STR("q"));
+             CFSTR("q"));
      msgsend(quitMenuItem, "setTarget:", NSApp);
 
      msgsend(
@@ -205,9 +207,9 @@ static
 id TreeViewDataSource_init(id self, SEL _cmd) {
     if((self = msgsendsuper(self ,"init"))) {
         id items = msgsend(alloc("NSMutableArray"), "init");
-        msgsend(items, "addObject:", STR("Item 1"));
-        msgsend(items, "addObject:", STR("Item 2"));
-        msgsend(items, "addObject:", STR("Item 3"));
+        msgsend(items, "addObject:", CFSTR("Item 1"));
+        msgsend(items, "addObject:", CFSTR("Item 2"));
+        msgsend(items, "addObject:", CFSTR("Item 3"));
         setivar(self, "items", items);
     }
     return self;
@@ -255,7 +257,7 @@ id TreeViewDataSource_outlineView_objectValueForTableColumn_byItem(id self, SEL 
     if(item) {
         return item;
     } else {
-        return STR("/");
+        return (id)CFSTR("/");
     }
 }
 
