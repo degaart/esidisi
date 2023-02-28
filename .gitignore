@@ -1,9 +1,10 @@
-.DS_Store
-._*
 *.bak
 *.swp
+.DS_Store
+._*
 .cache
 .vimrc
 build
 compile_commands.json
 links.txt
+xibless
