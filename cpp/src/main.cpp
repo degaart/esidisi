@@ -13,10 +13,15 @@ extern "C" void NSLog(objc_object *, ...);
 extern id *NSApp;
 #define NSApplicationActivationPolicyRegular 0
 #define NSWindowStyleMaskTitled (1 << 0)
+#define NSWindowStyleMaskClosable (1 << 1)
+#define NSWindowStyleMaskMiniaturizable (1 << 2)
 #define NSBackingStoreBuffered 2
 #define NSSplitViewDividerStylePaneSplitter 3
 #define NSTableColumnAutoresizingMask (1 << 0)
 #define NSTableColumnUserResizingMask ( 1 << 1 )
+#define NSBezelBorder 2
+#define NSViewMinYMargin 8
+#define NSViewMaxXMargin 4
 
 struct TreeItem {
     std::string label;
@@ -101,6 +106,9 @@ id stringWithUTF8String(const char* str) {
     return msgsend(objc_getClass("NSString"), "stringWithUTF8String:", str);
 }
 
+#define stringWithFormat(fmt, ...) \
+    (id)(CFAutorelease(CFStringCreateWithFormat(nullptr, nullptr, CFSTR(fmt), ##__VA_ARGS__)))
+
 void trace(const char* msg) {
     NSLog(stringWithUTF8String(msg));
 }
@@ -112,7 +120,7 @@ id initWindow(id self) {
         alloc("NSWindow"),
         "initWithContentRect:styleMask:backing:defer:",
         frame,
-        NSWindowStyleMaskTitled,
+        NSWindowStyleMaskTitled|NSWindowStyleMaskClosable|NSWindowStyleMaskMiniaturizable,
         NSBackingStoreBuffered,
         YES);
 
@@ -146,15 +154,62 @@ id initWindow(id self) {
     msgsend(treeView, "addTableColumn:", tableColumn);
     msgsend(treeView, "setStronglyReferencesItems:", YES);
     msgsend(treeView, "setDataSource:", treeDataSource);
-    msgsend(splitView, "addSubview:", treeView);
+    msgsend(treeView, "setHeaderView:", nullptr);
 
-    id pane2 = msgsend(
-        msgsend(
-            objc_getClass("NSTextField"),
-            "labelWithString:",
-            CFSTR("RIGHT PANEL")),
-        "autorelease");
-    msgsend(splitView, "addSubview:", pane2);
+    id scrollView = msgsend(
+            msgsend(
+                alloc("NSScrollView"),
+                "init"),
+            "autorelease");
+    msgsend(scrollView, "setDocumentView:", treeView);
+    msgsend(scrollView, "setHasVerticalScroller:", YES);
+    msgsend(scrollView, "setHasHorizontalScroller:", YES);
+    msgsend(scrollView, "setAutohidesScrollers:", YES);
+    msgsend(scrollView, "setBorderType:", NSBezelBorder);
+    msgsend(scrollView, "setAutoresizingMask:", NSViewMinYMargin|NSViewMaxXMargin);
+    msgsend(splitView, "addSubview:", scrollView);
+
+    id tableView = msgsend(
+            msgsend(
+                alloc("NSTableView"),
+                "init"),
+            "autorelease");
+
+    id tableDataSource = msgsend(alloc("TableViewDataSource"), "init");
+    setivar(self, "tableDataSource", tableDataSource);
+
+    msgsend(tableView, "setDataSource:", tableDataSource);
+
+    tableColumn = msgsend(
+            msgsend(
+                alloc("NSTableColumn"),
+                "initWithIdentifier:",
+                CFSTR("col1")),
+            "autorelease");
+    msgsend(tableColumn, "setTitle:", CFSTR("col1"));
+    msgsend(tableView, "addTableColumn:", tableColumn);
+
+    tableColumn = msgsend(
+            msgsend(
+                alloc("NSTableColumn"),
+                "initWithIdentifier:",
+                CFSTR("col2")),
+            "autorelease");
+    msgsend(tableColumn, "setTitle:", CFSTR("col2"));
+    msgsend(tableView, "addTableColumn:", tableColumn);
+
+    scrollView = msgsend(
+            msgsend(
+                alloc("NSScrollView"),
+                "init"),
+            "autorelease");
+    msgsend(scrollView, "setDocumentView:", tableView);
+    msgsend(scrollView, "setHasVerticalScroller:", YES);
+    msgsend(scrollView, "setHasHorizontalScroller:", YES);
+    msgsend(scrollView, "setAutohidesScrollers:", YES);
+    msgsend(scrollView, "setBorderType:", NSBezelBorder);
+    msgsend(scrollView, "setAutoresizingMask:", NSViewMinYMargin|NSViewMaxXMargin);
+    msgsend(splitView, "addSubview:", scrollView);
 
     msgsend(window, "setContentView:", splitView);
     return window;
@@ -172,6 +227,7 @@ id AppDelegate_init(id self, SEL _cmd) {
 
 static
 void AppDelegate_dealloc(id self, SEL _cmd) {
+    msgsend(getivar(self, "tableDataSource"), "release");
     msgsend(getivar(self, "treeDataSource"), "release");
     msgsend(getivar(self, "window"), "release");
     msgsendsuper(self, "dealloc");
@@ -181,6 +237,11 @@ static
 void AppDelegate_applicationDidFinishLaunching(id self, SEL _cmd, id aNotification) {
     msgsend(self, "populateMainMenu");
     msgsend(getivar(self, "window"), "makeKeyAndOrderFront:", self);
+}
+
+static
+BOOL Appdelegate_applicationShouldTerminateAfterLastWindowClosed(id self, SEL _cmd, id sender) {
+    return YES;
 }
 
 static
@@ -245,15 +306,13 @@ id TreeViewDataSource_init(id self, SEL _cmd) {
     return self;
 }
 
-void TreeViewDataSource_dealloc(id self) {
-    printf("%s\n", __PRETTY_FUNCTION__);
+void TreeViewDataSource_dealloc(id self, SEL _cmd) {
     delete(getivar(self, "root"));
     msgsendsuper(self, "dealloc");
 }
 
 static
 id TreeViewDataSource_outlineView_child_ofItem(id self, SEL _cmd, id view, int child, id item) {
-    printf("%s\n", __PRETTY_FUNCTION__);
     if(!item) {
         TreeItem* root = getivarp<TreeItem*>(self, "root");
         assert(root->label == "Root");
@@ -268,7 +327,6 @@ id TreeViewDataSource_outlineView_child_ofItem(id self, SEL _cmd, id view, int c
 
 static
 BOOL TreeViewDataSource_outlineView_isItemExpandable(id self, SEL _cmd, id view, id item) {
-    printf("%s\n", __PRETTY_FUNCTION__);
     if(!item) {
         TreeItem* root = getivarp<TreeItem*>(self, "root");
         assert(root->label == "Root");
@@ -281,7 +339,6 @@ BOOL TreeViewDataSource_outlineView_isItemExpandable(id self, SEL _cmd, id view,
 
 static
 int TreeViewDataSource_outlineView_numbernumberOfChildrenOfItem(id self, SEL _cmd, id view, id item) {
-    printf("%s\n", __PRETTY_FUNCTION__);
     if(!item) {
         TreeItem* root = getivarp<TreeItem*>(self, "root");
         return root->children.size();
@@ -293,7 +350,6 @@ int TreeViewDataSource_outlineView_numbernumberOfChildrenOfItem(id self, SEL _cm
 
 static
 id TreeViewDataSource_outlineView_objectValueForTableColumn_byItem(id self, SEL _cmd, id view, id column, id item) {
-    printf("%s\n", __PRETTY_FUNCTION__);
     if(!item) {
         TreeItem* root = getivarp<TreeItem*>(self, "root");
         return stringWithUTF8String(root->label.c_str());
@@ -301,6 +357,28 @@ id TreeViewDataSource_outlineView_objectValueForTableColumn_byItem(id self, SEL 
         TreeItem* obj = (TreeItem*)msgsend(item, "pointerValue");
         return stringWithUTF8String(obj->label.c_str());
     }
+}
+
+static
+id TableViewDataSource_init(id self, SEL _cmd) {
+    if((self = msgsendsuper(self, "init"))) {
+    }
+    return self;
+}
+
+static
+void TableViewDataSource_dealloc(id self, SEL _cmd) {
+    msgsendsuper(self, "dealloc");
+}
+
+static
+int TableViewDataSource_numberOfRowsInTableView(id self, SEL _cmd, id tableView) {
+    return 4;
+}
+
+static
+id TableViewDataSource_tableView_objectValueForTableColumn_row(id self, SEL _cmd, id tableView, id tableColumn, int row) {
+    return stringWithFormat("col %@ item #%d", msgsend(tableColumn, "identifier"), row);
 }
 
 int main() {
@@ -313,9 +391,11 @@ int main() {
     class_addMethod(appDelegateClass, sel_getUid("init"), (IMP)AppDelegate_init, "i@:");
     class_addMethod(appDelegateClass, sel_getUid("dealloc"), (IMP)AppDelegate_dealloc, "v@:");
     class_addMethod(appDelegateClass, sel_getUid("applicationDidFinishLaunching:"), (IMP)AppDelegate_applicationDidFinishLaunching, "v@:@");
+    class_addMethod(appDelegateClass, sel_getUid("applicationShouldTerminateAfterLastWindowClosed:"), (IMP)Appdelegate_applicationShouldTerminateAfterLastWindowClosed, "i@:@");
     class_addMethod(appDelegateClass, sel_getUid("populateMainMenu"), (IMP)AppDelegate_populateMainMenu, "v@:");
     class_addIvar(appDelegateClass, "window", sizeof(id), alignof(id), "@");
     class_addIvar(appDelegateClass, "treeDataSource", sizeof(id), alignof(id), "@");
+    class_addIvar(appDelegateClass, "tableDataSource", sizeof(id), alignof(id), "@");
     objc_registerClassPair(appDelegateClass);
 
     Class treeDataSourceClass = objc_allocateClassPair(objc_getClass("NSObject"), "TreeViewDataSource", 0);
@@ -327,6 +407,13 @@ int main() {
     class_addMethod(treeDataSourceClass, sel_getUid("outlineView:objectValueForTableColumn:byItem:"), (IMP)TreeViewDataSource_outlineView_objectValueForTableColumn_byItem, "@@:@@@");
     class_addIvar(treeDataSourceClass, "root",sizeof(TreeItem*), alignof(TreeItem*), "@");
     objc_registerClassPair(treeDataSourceClass);
+
+    Class tableDataSourceClass = objc_allocateClassPair(objc_getClass("NSObject"), "TableViewDataSource", 0);
+    class_addMethod(tableDataSourceClass, sel_getUid("init"), (IMP)TableViewDataSource_init, "@@:");
+    class_addMethod(tableDataSourceClass, sel_getUid("dealloc"), (IMP)TableViewDataSource_dealloc, "@@:");
+    class_addMethod(tableDataSourceClass, sel_getUid("numberOfRowsInTableView:"), (IMP)TableViewDataSource_numberOfRowsInTableView, "@@:@");
+    class_addMethod(tableDataSourceClass, sel_getUid("tableView:objectValueForTableColumn:row:"), (IMP)TableViewDataSource_tableView_objectValueForTableColumn_row, "@@:@:@:i");
+    objc_registerClassPair(tableDataSourceClass);
 
     auto appDelegate = msgsend(msgsend(msgsend(appDelegateClass, "alloc"), "init"), "autorelease");
 
