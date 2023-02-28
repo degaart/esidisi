@@ -132,7 +132,7 @@
 }
 
 - (id)tableView:(NSTableView*)tableView objectValueForTableColumn:(NSTableColumn*)col row:(NSInteger)row {
-    return [NSString stringWithFormat:@"col %@ item #%d", col, (int)row];
+    return [NSString stringWithFormat:@"col %@ item #%d", [col identifier], (int)row];
 }
 
 @end
@@ -180,7 +180,17 @@
     [treeView addTableColumn:col];
     [treeView setStronglyReferencesItems:YES];
     [treeView setDataSource:treeDataSource];
-    [splitView addSubview:treeView];
+    [treeView setHeaderView:nil];
+
+    NSScrollView* scrollView = [[[NSScrollView alloc] init] autorelease];
+    [scrollView setDocumentView:treeView];
+    [scrollView setHasVerticalScroller:YES];
+    [scrollView setHasHorizontalScroller:YES];
+    [scrollView setAutohidesScrollers:YES];
+    [scrollView setBorderType:NSBezelBorder];
+    [scrollView setAutoresizingMask:NSViewMinYMargin|NSViewMaxXMargin];
+
+    [splitView addSubview:scrollView];
 
     NSTableView* tableView = [[[NSTableView alloc] init] autorelease];
     tableDataSource = [[TableViewDataSource alloc] init];
@@ -195,10 +205,15 @@
     [col setTitle:@"Column 2"];
     [tableView addTableColumn:col];
 
-    NSTableHeaderView* headerView = [[[NSTableHeaderView alloc] init] autorelease];
-    [tableView setHeaderView:headerView];
+    scrollView = [[[NSScrollView alloc] init] autorelease];
+    [scrollView setDocumentView:tableView];
+    [scrollView setHasVerticalScroller:YES];
+    [scrollView setHasHorizontalScroller:YES];
+    [scrollView setAutohidesScrollers:YES];
+    [scrollView setBorderType:NSBezelBorder];
+    [scrollView setAutoresizingMask:NSViewMinYMargin|NSViewMaxXMargin];
 
-    [splitView addSubview:tableView];
+    [splitView addSubview:scrollView];
 
     [win setContentView:splitView];
     return win;
