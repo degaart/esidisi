@@ -22,6 +22,13 @@ extern id *NSApp;
 #define NSBezelBorder 2
 #define NSViewMinYMargin 8
 #define NSViewMaxXMargin 4
+#define NSUserInterfaceLayoutOrientationHorizontal 0
+#define NSUserInterfaceLayoutOrientationVertical 1
+#define NSStackViewGravityTop 1
+#define NSStackViewGravityLeading 1
+#define NSStackViewGravityCenter 2
+#define NSStackViewGravityBottom 3
+#define NSStackViewGravityTrailing 3
 
 struct TreeItem {
     std::string label;
@@ -221,6 +228,9 @@ id AppDelegate_init(id self, SEL _cmd) {
     if(self) {
         id window = initWindow(self);
         setivar(self, "window", window);
+
+        id profileWindow = msgsend(alloc("ProfileWindow"), "init");
+        setivar(self, "profileWindow", profileWindow);
     }
     return self;
 }
@@ -230,13 +240,15 @@ void AppDelegate_dealloc(id self, SEL _cmd) {
     msgsend(getivar(self, "tableDataSource"), "release");
     msgsend(getivar(self, "treeDataSource"), "release");
     msgsend(getivar(self, "window"), "release");
+    msgsend(getivar(self, "profileWindow"), "release");
     msgsendsuper(self, "dealloc");
 }
 
 static
 void AppDelegate_applicationDidFinishLaunching(id self, SEL _cmd, id aNotification) {
     msgsend(self, "populateMainMenu");
-    msgsend(getivar(self, "window"), "makeKeyAndOrderFront:", self);
+    //msgsend(getivar(self, "window"), "makeKeyAndOrderFront:", self);
+    msgsend(getivar(self, "profileWindow"), "show:", self);
 }
 
 static
@@ -278,6 +290,11 @@ void AppDelegate_populateMainMenu(id self, SEL _cmd) {
              subMenu,
              menuItem);
      msgsend(NSApp, "setMainMenu:", mainMenu);
+}
+
+static
+void AppDelegate_setProfile(id self, SEL _cmd, id profile) {
+    msgsend(getivar(self, "window"), "makeKeyAndOrderFront:", self);
 }
 
 static
@@ -381,6 +398,74 @@ id TableViewDataSource_tableView_objectValueForTableColumn_row(id self, SEL _cmd
     return stringWithFormat("col %@ item #%d", msgsend(tableColumn, "identifier"), row);
 }
 
+id ProfileWindow_init(id self, SEL _cmd) {
+    if((self = msgsendsuper(self, "init"))) {
+        CGRect frame = CGRectMake(0, 0, 640, 480);
+        auto window = msgsend(
+            alloc("NSWindow"),
+            "initWithContentRect:styleMask:backing:defer:",
+            frame,
+            NSWindowStyleMaskTitled|NSWindowStyleMaskClosable,
+            NSBackingStoreBuffered,
+            YES);
+
+        auto stackView = msgsend(
+                msgsend(
+                    alloc("NSStackView"),
+                    "init"),
+                "autorelease");
+        msgsend(stackView, "setOrientation:", NSUserInterfaceLayoutOrientationVertical);
+
+        auto lbl = msgsend(
+                objc_getClass("NSTextField"),
+                "labelWithString:",
+                CFSTR("Profile:"));
+        msgsend(stackView, "addView:inGravity:", lbl, NSStackViewGravityTrailing);
+
+        auto combo = msgsend(
+                msgsend(
+                    alloc("NSComboBox"),
+                    "init"),
+                "autorelease");
+        msgsend(combo, "setEditable:", NO);
+        msgsend(combo, "addItemWithObjectValue:", CFSTR("Profile 1"));
+        msgsend(combo, "addItemWithObjectValue:", CFSTR("Profile 2"));
+        msgsend(combo, "addItemWithObjectValue:", CFSTR("Profile 3"));
+        setivar(self, "profileCombo", combo);
+        msgsend(stackView, "addView:inGravity:", combo, NSStackViewGravityTrailing);
+
+        auto btn = msgsend(
+                objc_getClass("NSButton"),
+                "buttonWithTitle:target:action:",
+                CFSTR("OK"),
+                self,
+                sel_getUid("okButtonClicked:"));
+        msgsend(stackView, "addView:inGravity:", btn, NSStackViewGravityTrailing);
+
+        msgsend(window, "setContentView:", stackView);
+        setivar(self, "window", window);
+    }
+    return self;
+}
+
+void ProfileWindow_dealloc(id self, SEL _cmd) {
+    msgsend(getivar(self, "window"), "release");
+    msgsend(getivar(self, "profileCombo"), "release");
+    msgsendsuper(self, "dealloc");
+}
+
+void ProfileWindow_okButtonClicked(id self, SEL _cmd, id sender) {
+    id sel = msgsend(getivar(self, "profileCombo"), "objectValueOfSelectedItem");
+    if(sel) {
+        msgsend(msgsend(NSApp, "delegate"), "setProfile:", sel);
+        msgsend(getivar(self, "window"), "close");
+    }
+}
+
+void ProfileWindow_show(id self, SEL _cmd, id sender) {
+    msgsend(getivar(self, "window"), "makeKeyAndOrderFront:", sender);
+}
+
 int main() {
     auto pool = msgsend(objc_getClass("NSAutoreleasePool"), "new");
 
@@ -393,10 +478,21 @@ int main() {
     class_addMethod(appDelegateClass, sel_getUid("applicationDidFinishLaunching:"), (IMP)AppDelegate_applicationDidFinishLaunching, "v@:@");
     class_addMethod(appDelegateClass, sel_getUid("applicationShouldTerminateAfterLastWindowClosed:"), (IMP)Appdelegate_applicationShouldTerminateAfterLastWindowClosed, "i@:@");
     class_addMethod(appDelegateClass, sel_getUid("populateMainMenu"), (IMP)AppDelegate_populateMainMenu, "v@:");
+    class_addMethod(appDelegateClass, sel_getUid("setProfile:"), (IMP)AppDelegate_setProfile, "v@:@");
     class_addIvar(appDelegateClass, "window", sizeof(id), alignof(id), "@");
+    class_addIvar(appDelegateClass, "profileWindow", sizeof(id), alignof(id), "@");
     class_addIvar(appDelegateClass, "treeDataSource", sizeof(id), alignof(id), "@");
     class_addIvar(appDelegateClass, "tableDataSource", sizeof(id), alignof(id), "@");
     objc_registerClassPair(appDelegateClass);
+
+    Class profileWindowClass = objc_allocateClassPair(objc_getClass("NSObject"), "ProfileWindow", 0);
+    class_addMethod(profileWindowClass, sel_getUid("init"), (IMP)ProfileWindow_init, "@@:");
+    class_addMethod(profileWindowClass, sel_getUid("dealloc"), (IMP)ProfileWindow_dealloc, "@@:");
+    class_addMethod(profileWindowClass, sel_getUid("okButtonClicked:"), (IMP)ProfileWindow_okButtonClicked, "@@:@");
+    class_addMethod(profileWindowClass, sel_getUid("show:"), (IMP)ProfileWindow_show, "@@:@");
+    class_addIvar(profileWindowClass, "window", sizeof(id), alignof(id), "@");
+    class_addIvar(profileWindowClass, "profileCombo", sizeof(id), alignof(id), "@");
+    objc_registerClassPair(profileWindowClass);
 
     Class treeDataSourceClass = objc_allocateClassPair(objc_getClass("NSObject"), "TreeViewDataSource", 0);
     class_addMethod(treeDataSourceClass, sel_getUid("init"), (IMP)TreeViewDataSource_init, "@@:");
